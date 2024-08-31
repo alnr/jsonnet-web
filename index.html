@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>jsonnet-web</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="wasm_exec.js"></script>
+    <script>
+      if (!WebAssembly.instantiateStreaming) {
+        WebAssembly.instantiateStreaming = async (resp, importObject) => {
+          const source = await (await resp).arrayBuffer();
+          return await WebAssembly.instantiate(source, importObject);
+        };
+      }
+      const go = new Go();
+      WebAssembly.instantiateStreaming(
+        fetch("jsonnet.wasm"),
+        go.importObject
+      ).then((result) => {
+        go.run(result.instance);
+      });
+    </script>
+  </head>
+
+  <body>
+    <div class="container">
+      <div class="input-container">
+        <textarea
+          id="claims"
+          class="input-area"
+          data-gramm_editor="false"
+          spellcheck="false"
+          autocomplete="off"
+        >
+{
+    "email": "foo@bar.com",
+    "email_verified": true,
+    "hd": "bar.com"
+}
+        </textarea>
+        <textarea
+          id="snippet"
+          class="input-area"
+          data-gramm_editor="false"
+          spellcheck="false"
+          autocomplete="off"
+        >
+local claims = {
+    email_verified: false,
+} + std.extVar('claims');
+    
+{
+    identity: {
+        traits: {
+            [if 'email' in claims && claims.email_verified then 'email' else null]: claims.email,
+            [if 'hd' in claims && claims.email_verified then 'hd' else null]: claims.hd,
+        },
+    },
+}
+        </textarea>
+        <textarea
+          id="schema"
+          class="input-area"
+          data-gramm_editor="false"
+          spellcheck="false"
+          autocomplete="off"
+        >
+{
+    "$id": "https://schemas.ory.sh/presets/kratos/identity.email.schema.json",
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Person",
+    "type": "object",
+    "properties": {
+        "traits": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "format": "email",
+                    "title": "E-Mail",
+                    "ory.sh/kratos": {
+                        "credentials": {
+                            "password": {
+                                "identifier": true
+                            },
+                            "webauthn": {
+                                "identifier": true
+                            },
+                            "totp": {
+                                "account_name": true
+                            },
+                            "code": {
+                                "identifier": true,
+                                "via": "email"
+                            }
+                        },
+                        "recovery": {
+                            "via": "email"
+                        },
+                        "verification": {
+                            "via": "email"
+                        }
+                    },
+                    "maxLength": 320
+                }
+            },
+            "required": [
+                "email"
+            ],
+            "additionalProperties": false
+        }
+    }
+}
+        </textarea>
+      </div>
+      <textarea
+        id="output"
+        class="output-area"
+        readonly
+        data-gramm_editor="false"
+        spellcheck="false"
+        autocomplete="off"
+      ></textarea>
+    </div>
+
+    <script>
+      var prev_input = null;
+      var prev_claims = null;
+      var prev_schema = null;
+      document.getElementById("snippet").value =
+        document.getElementById("snippet").value.trim() + "\n";
+      window.setInterval(function () {
+        if (!window.sonnet) {
+          return;
+        }
+
+        var claims = document.getElementById("claims").value;
+        var input = document.getElementById("snippet").value;
+        var schema = document.getElementById("schema").value;
+        if (claims != prev_claims || input != prev_input || schema != prev_schema) {
+          var res = window.sonnet(claims, input, schema);
+          document.getElementById("output").value = res;
+          prev_input = input;
+        }
+      }, 50);
+    </script>
+  </body>
+</html>
